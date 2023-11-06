@@ -25,11 +25,24 @@ public class PlayerController : MonoBehaviour
     public Image dirUp;
     public Image dirDown;
 
-   
+    public Sprite front;
+    public Sprite back;
+
+    SpriteRenderer mySpr;
+
     bool isDirLeft;
     bool isDirRight;
     bool isDirUp;
     bool isDirDown;
+
+    Vector2 AttackDir;
+
+    public GameObject weaponContainer;
+    float checkingTime = 0.1f;
+    float checkingTime_cur;
+
+    int h_dir; // 수평방향 움직임을 정의
+    int v_dir; // 수직방향 움직임을 정의
 
     private void Awake()
     {
@@ -44,18 +57,27 @@ public class PlayerController : MonoBehaviour
     void Start()
     {
         rigid = GetComponent<Rigidbody2D>();
+        mySpr = GetComponent<SpriteRenderer>();
+        checkingTime_cur = checkingTime;
         // 초기 스프라이트 방향은 아래
         isDirLeft = false;
         isDirRight = false;
         isDirUp = false;
         isDirDown = true;
+
+        AttackDir = new Vector2(0, 1);
+        weaponContainer = Instantiate(weaponContainer, transform.position, Quaternion.identity);
     }
 
     // Update is called once per frame
     void Update()
     {
+        SelectDirection();
+        SetAttackDirect();
         Move();
+        SetWeaponPosition();
         RestoreSTA();
+        UpdateSprite();
         UpdateSpriteDirection();
     }
 
@@ -81,28 +103,18 @@ public class PlayerController : MonoBehaviour
         return curSTA/maxSTA;
     }
 
+    void MoveHor() {
+        rigid.velocity = new Vector2(Mathf.Abs(h_dir)*(rigid.velocity.x + h_dir * 3 * Time.deltaTime * curSpeed), rigid.velocity.y);
+        if (Mathf.Abs(rigid.velocity.x) > curSpeed) rigid.velocity = new Vector2(h_dir*curSpeed, rigid.velocity.y);
+    }
 
+    void MoveVer()
+    {
+        rigid.velocity = new Vector2(rigid.velocity.x , Mathf.Abs(v_dir) * (rigid.velocity.y + v_dir * 3 * Time.deltaTime * curSpeed));
+        if (Mathf.Abs(rigid.velocity.y) > curSpeed) rigid.velocity = new Vector2(rigid.velocity.x, v_dir * curSpeed);
+    }
 
-    void MoveLeft() {
-        rigid.velocity = new Vector2(rigid.velocity.x - 3*Time.deltaTime* curSpeed, rigid.velocity.y);
-        if (Mathf.Abs(rigid.velocity.x) > curSpeed) rigid.velocity = new Vector2(-curSpeed, rigid.velocity.y);
-            
-    }
-    void MoveRight()
-    {
-        rigid.velocity = new Vector2(rigid.velocity.x + 3*Time.deltaTime * curSpeed, rigid.velocity.y);
-        if (Mathf.Abs(rigid.velocity.x) > curSpeed) rigid.velocity = new Vector2(curSpeed, rigid.velocity.y);
-    }
-    void MoveUp()
-    {
-        rigid.velocity = new Vector2(rigid.velocity.x , rigid.velocity.y + 3*Time.deltaTime * curSpeed);
-        if (Mathf.Abs(rigid.velocity.y) > curSpeed) rigid.velocity = new Vector2(rigid.velocity.x, curSpeed);
-    }
-    void MoveDown()
-    {
-        rigid.velocity = new Vector2(rigid.velocity.x, rigid.velocity.y - 3*Time.deltaTime * curSpeed);
-        if (Mathf.Abs(rigid.velocity.y) > curSpeed) rigid.velocity= new Vector2(rigid.velocity.x, -curSpeed);
-    }
+   
     void Move() {
         if (Input.GetKey(KeyCode.Space) && curSTA > 0)
         {
@@ -117,27 +129,17 @@ public class PlayerController : MonoBehaviour
         }
 
         // accelation
-        if (isDirLeft = Input.GetKey(KeyCode.LeftArrow)) 
-        { 
-            MoveLeft();
-        }
-        if (isDirRight = Input.GetKey(KeyCode.RightArrow)) 
-        {
-            MoveRight();
-        }
 
-        if (isDirUp = Input.GetKey(KeyCode.UpArrow)) 
-        {
-            MoveUp();
-        }
+        isDirLeft = Input.GetKey(KeyCode.LeftArrow);
+        isDirRight = Input.GetKey(KeyCode.RightArrow);
+        isDirUp = Input.GetKey(KeyCode.UpArrow);
+        isDirDown = Input.GetKey(KeyCode.DownArrow);
 
-        if (isDirDown = Input.GetKey(KeyCode.DownArrow)) 
-        {
-            MoveDown();
-        }
- 
-        // 내부 수정사항 : 방향을 따로 두지 않고 x축y축 방향으로 나누고 두 방향에 대해서만 생각하기
-        // 기대효과 -> 방향을 유지할 수 있어 추후 공격 방향 결정에 유리함
+        MoveHor();
+        MoveVer();
+        // 문제점 : 이 경우 공격 방향을 설정하는 플래그를 정의하기 어려움.
+        // 해결방법 : 가장 최근 바라본 방향을 기억하는 새로운 플래그를 세우거나 1
+        //            기존 변수를 이용하여 어떻게든 구현하는 것 2
 
         // de-accelation
         if (Input.GetKeyUp(KeyCode.LeftArrow) || Input.GetKeyUp(KeyCode.RightArrow)) rigid.velocity = new Vector2(0, rigid.velocity.y);
@@ -179,5 +181,154 @@ public class PlayerController : MonoBehaviour
         {
             dirDown.color = new Color(dirDown.color.r, dirDown.color.g, dirDown.color.b, 0f);
         }
+    }
+
+    void SelectDirection() {
+        int l,r,u,d;
+
+        l = (isDirLeft) ? 1 : 0;
+        r = (isDirRight) ? 1 : 0;
+        u = (isDirUp) ? 1 : 0;
+        d = (isDirDown) ? 1 : 0;
+
+        h_dir = r - l;
+        v_dir = u - d;
+    }
+
+    void SetAttackDirect() {
+
+        checkingTime_cur -= Time.deltaTime;
+        if (checkingTime_cur > 0)
+            return;
+        else {
+            checkingTime_cur = checkingTime;
+        }
+
+        //if (Input.GetKey(KeyCode.LeftArrow) && Input.GetKey(KeyCode.UpArrow)) {
+        //    AttackDir = new Vector2(-1, 1);
+        //}
+        //if (Input.GetKey(KeyCode.LeftArrow) && Input.GetKey(KeyCode.DownArrow))
+        //{
+        //    AttackDir = new Vector2(-1, -1);
+        //}
+        //if (Input.GetKey(KeyCode.LeftArrow))
+        //{
+        //    AttackDir = new Vector2(-1, 0);
+        //}
+
+
+        //if (Input.GetKey(KeyCode.RightArrow) && Input.GetKey(KeyCode.UpArrow))
+        //{
+        //    AttackDir = new Vector2(1, 1);
+        //}
+        //if (Input.GetKey(KeyCode.RightArrow) && Input.GetKey(KeyCode.DownArrow))
+        //{
+        //    AttackDir = new Vector2(1, -1);
+        //}
+        //if (Input.GetKey(KeyCode.RightArrow))
+        //{
+        //    AttackDir = new Vector2(1, 0);
+        //}
+
+        //if (Input.GetKey(KeyCode.UpArrow))
+        //{
+        //    AttackDir = new Vector2(0, 1);
+        //}
+        //if (Input.GetKey(KeyCode.RightArrow))
+        //{
+        //    AttackDir = new Vector2(0, -1);
+        //}
+        if (Input.GetKey(KeyCode.LeftArrow))
+        {
+            //AttackDir = new Vector2(-1, AttackDir.y);
+            if (Input.GetKey(KeyCode.UpArrow))
+            {
+                AttackDir = new Vector2(-1, 1);
+            }
+            else if (Input.GetKey(KeyCode.DownArrow))
+            {
+                AttackDir = new Vector2(-1, -1);
+            }
+            else
+            {
+                AttackDir = new Vector2(-1, 0);
+            }
+        }
+        if (Input.GetKey(KeyCode.RightArrow))
+        {
+            //AttackDir = new Vector2(1, AttackDir.y);
+            if (Input.GetKey(KeyCode.UpArrow))
+            {
+                AttackDir = new Vector2(1, 1);
+            }
+            else if (Input.GetKey(KeyCode.DownArrow))
+            {
+                AttackDir = new Vector2(1, -1);
+            }
+            else
+            {
+                AttackDir = new Vector2(1, 0);
+            }
+        }
+        if (Input.GetKey(KeyCode.UpArrow))
+        {
+            //AttackDir = new Vector2(AttackDir.x, 1);
+            if (Input.GetKey(KeyCode.LeftArrow))
+            {
+                AttackDir = new Vector2(-1, 1);
+            }
+            else if (Input.GetKey(KeyCode.RightArrow))
+            {
+                AttackDir = new Vector2(1, 1);
+            }
+            else
+            {
+                AttackDir = new Vector2(0, 1);
+            }
+
+        }
+        if (Input.GetKey(KeyCode.DownArrow))
+        {
+            //AttackDir = new Vector2(AttackDir.x, -1);
+            if (Input.GetKey(KeyCode.LeftArrow))
+            {
+                AttackDir = new Vector2(-1, -1);
+            }
+            else if (Input.GetKey(KeyCode.RightArrow))
+            {
+                AttackDir = new Vector2(1, -1);
+            }
+            else
+            {
+                AttackDir = new Vector2(0, -1);
+            }
+
+        }
+    }
+
+    void UpdateSprite() {
+        if (v_dir == 1)
+        {
+            mySpr.sprite = back;
+        }
+        else if(v_dir == -1)
+        {
+            mySpr.sprite = front;
+        }
+        if (isDirLeft == true && h_dir < 0)
+        {
+            mySpr.flipX = true;
+        }
+        else if(isDirRight == true && h_dir >= 0) {
+            mySpr.flipX = false;
+        }
+    }
+
+    void SetWeaponPosition() {
+        // 공격 방향 정규화 -> 스케일링 -> 각도 계산 -> 위치 결정
+        float angle = Mathf.Atan2(AttackDir.y, AttackDir.x) ;
+
+        weaponContainer.transform.position = new Vector2(transform.position.x + Mathf.Cos(angle), transform.position.y + Mathf.Sin(angle));
+        weaponContainer.transform.rotation = Quaternion.Euler(0, 0, angle * Mathf.Rad2Deg);
     }
 }
